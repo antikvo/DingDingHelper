@@ -35,6 +35,7 @@ import com.ucmap.dingdinghelper.common.OrderThread;
 import com.ucmap.dingdinghelper.entity.AccountEntity;
 import com.ucmap.dingdinghelper.entity.MessageEvent;
 import com.ucmap.dingdinghelper.sphelper.SPUtils;
+import com.ucmap.dingdinghelper.timing.TimingManagerUtil;
 import com.ucmap.dingdinghelper.ui.MainActivity;
 import com.ucmap.dingdinghelper.utils.Constants;
 import com.ucmap.dingdinghelper.utils.DingHelperUtils;
@@ -278,6 +279,10 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
                 + " CURRENT_WINDOW :" + CURRENT_WINDOW
                 + "  getClassName:" + event.getClassName() + "  :" + event.getClass()
         );
+        if (TimingManagerUtil.isWeekends()) {
+            Log.i("Infoss", "周末不打卡");
+            closeHelperService();
+        }
         switch (eventType) {
             /*窗口变化*/
             case AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED:

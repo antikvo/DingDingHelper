@@ -24,6 +24,7 @@ import com.ucmap.dingdinghelper.ITimingAidlInterface;
 import com.ucmap.dingdinghelper.R;
 import com.ucmap.dingdinghelper.entity.AccountEntity;
 import com.ucmap.dingdinghelper.sphelper.SPUtils;
+import com.ucmap.dingdinghelper.timing.TimingManagerUtil;
 import com.ucmap.dingdinghelper.ui.MainActivity;
 import com.ucmap.dingdinghelper.utils.Constants;
 import com.ucmap.dingdinghelper.utils.DateUtils;
@@ -273,7 +274,7 @@ public class TimingService extends Service {
         Log.i("DingDingHelper", "当前状态:" + STATE + "  hour:" + hour + "  min:" + min);
         if ((STATE == 0) && (this.hour < hour || (this.hour == hour && this.min <= min))) {
             Log.i("DingDingHelper", "时间:" + this.hour + "  :  " + this.min);
-            if ((this.hour == hour && this.min <= min))
+            if ((this.hour != hour || this.min > min) )
                 toCheckIn();
             String time = "";
             time = (String) SPUtils.getString(Constants.AFTERNOON_CHECK_IN_TIME, "18:45");

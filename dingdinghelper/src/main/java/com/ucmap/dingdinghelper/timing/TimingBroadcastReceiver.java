@@ -33,6 +33,10 @@ public class TimingBroadcastReceiver extends BroadcastReceiver {
             Toast.makeText(App.mContext, "上一次打卡时间没超过15s", Toast.LENGTH_SHORT).show();
             return;
         }
+        if(TimingManagerUtil.isWeekends()){
+            Log.i("Infoss", "TimingBroadcastReceiver--周末不打卡");
+            return;
+        }
         lastTime = tmp;
         long intervalMillis = intent.getLongExtra("intervalMillis", 0);
         if (intervalMillis != 0 && !Constants.IS_NOTITY_TYPE_CHECK_IN_TAG) {
@@ -67,6 +71,5 @@ public class TimingBroadcastReceiver extends BroadcastReceiver {
         flag = -1;
 
     }
-
 
 }

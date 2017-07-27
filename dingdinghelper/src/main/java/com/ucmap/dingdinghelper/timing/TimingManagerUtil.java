@@ -122,4 +122,9 @@ public class TimingManagerUtil {
     }
 
 
+    public static boolean isWeekends() {
+        Calendar c = Calendar.getInstance();
+        int week = c.get(Calendar.DAY_OF_WEEK);
+        return 1 == week || 7 == week;
+    }
 }
