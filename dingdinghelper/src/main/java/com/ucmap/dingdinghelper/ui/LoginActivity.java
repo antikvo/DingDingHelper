@@ -89,8 +89,9 @@ public class LoginActivity extends AppCompatActivity {
         });
         // Set up the login form.
         mEmailView = (AutoCompleteTextView) findViewById(R.id.email);
-
+        mEmailView.setText("15858291780");
         mPasswordView = (EditText) findViewById(R.id.password);
+        mPasswordView.setText("kt0607");
         mPasswordView.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
             public boolean onEditorAction(TextView textView, int id, KeyEvent keyEvent) {

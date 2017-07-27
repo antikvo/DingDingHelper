@@ -23,6 +23,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -36,7 +37,6 @@ import com.ucmap.dingdinghelper.entity.MessageEvent;
 import com.ucmap.dingdinghelper.sphelper.SPUtils;
 import com.ucmap.dingdinghelper.ui.MainActivity;
 import com.ucmap.dingdinghelper.utils.Constants;
-import com.ucmap.dingdinghelper.utils.DateUtils;
 import com.ucmap.dingdinghelper.utils.DingHelperUtils;
 import com.ucmap.dingdinghelper.utils.JsonUtils;
 import com.ucmap.dingdinghelper.utils.ShellUtils;
@@ -47,6 +47,7 @@ import org.greenrobot.eventbus.ThreadMode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static com.ucmap.dingdinghelper.utils.DateUtils.getHourAndMin;
 
@@ -145,12 +146,15 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
 
     /*打卡页面的返回按钮*/
     private static final String CHECK_IN_PAGER_BACK = "com.alibaba.android.rimet:id/back_layout";
+    private static final String CHECK_PAGE_BACK = "com.alibaba.android.rimet:id/img_back";
+
     /**
      * 中午十二点为上班或者下班打卡中间界限
      */
     private static final int TIME_LIMIT = 12;
     private List<AccountEntity> mAccountEntities;
-
+    private boolean hasMoveUp = false;
+    private Random r = new Random();
     /*标示service是否已经开启*/
     public static volatile boolean IS_ENABLE_DINGDINGHELPERACCESSIBILITYSERVICE = false;
 
@@ -215,6 +219,8 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
      * 下标
      */
     private int index = 0;
+    private boolean isTryOpenCheckInPage = false;
+    private Handler handler = new Handler();
 
     private void init() {
 
@@ -224,6 +230,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
             Toast.makeText(App.mContext, "至少需要保存一个钉钉账号", Toast.LENGTH_SHORT).show();
             return;
         }
+        hasMoveUp = false;
         doScript();
     }
 
@@ -234,6 +241,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
             return;
         targetCheckInAcount = mAccountEntities.get(index++);
 
+        retryCount = 0;
         STATE = STATE_UNCHECKED_IN;
         Log.i("Infoss", "current account:" + mAccountEntities.toString());
 
@@ -250,7 +258,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
         if (time.length() >= 4) {
             String[] hourAndMin = time.split(":");
             this.hour = Integer.parseInt(hourAndMin[0]);
-            this.min = Integer.parseInt(hourAndMin[1]);
+            this.min = 40 + r.nextInt(13);
         }
 
     }
@@ -262,18 +270,14 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
      */
     @RequiresApi(api = Build.VERSION_CODES.KITKAT)
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {
+    public void onAccessibilityEvent(final AccessibilityEvent event) {
         tag_callback_time = System.currentTimeMillis();
         int eventType = event.getEventType();
-        Log.i("Infoss", "onAccessibilityEvent   ..    ");
-
-        Log.i("Infoss", " eventType: " + eventType + "   getEventTime:  " + event.getEventTime() + "     getAction：" +
-                event.getAction() + "getContentChangeTypes:" + event.getContentChangeTypes()
+        Log.i("Infoss", " eventType: " + eventType
                 + " getText :" + event.getText().toString()
-                + "getPackageName :" + event.getPackageName() + "getRecordCount : " + event.getRecordCount()
-                + "  getClassName:" + event.getClassName() + "  :" + event.getClass() + "   getParcelableData:" + event.getParcelableData()
+                + " CURRENT_WINDOW :" + CURRENT_WINDOW
+                + "  getClassName:" + event.getClassName() + "  :" + event.getClass()
         );
-
         switch (eventType) {
             /*窗口变化*/
             case AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED:
@@ -295,40 +299,46 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
                 /*当前窗口赋值*/
         DingDingHelperAccessibilityService.CURRENT_WINDOW = className;
         Log.i("Infoss", "current className:" + className + "   isTrue:" + (className.equals(LOGINWINDOW)));
-                /*如果当前的窗口登陆窗口*/
-        if (className.equals(LOGINWINDOW) && STATE == STATE_UNCHECKED_IN) {
-            toSignIn();
-        } else if (HOMEWINDOW.equals(className)) {
-            Log.i("Infoss", "c state:" + STATE);
-            if (STATE == STATE_UNCHECKED_IN)
-                performWaitCheckIn();
-            else if (STATE == STATE_UNCHECKED_IN)
-                switchMine();
+        if (className.contains("activity")) {
 
-        } else if (CHECK_IN_PAGER_TAGET.equals(className)) {
-            Log.i("Infoss", "openCheckInDialog");
-            if (STATE != STATE_CHECKED_IN) {
-                openCheckInDialog();
-            } else {
-                backHomePager();
-            }
-        } else if (SETTINGWINDOW.equals(className) && STATE != STATE_UNCHECKED_IN) {
-            inputClick(SETTING_SIGN_OUT_ID);
-        } else if (ALERT_DIALOG_WINDOW.equals(className)) {
-            List<AccessibilityNodeInfo> mAccessibilityNodeInfos = new ArrayList<>();
+            if (className.equals(LOGINWINDOW) && STATE == STATE_UNCHECKED_IN) {
+                toSignIn();
+            } else if (HOMEWINDOW.equals(className)) {
+                if (STATE == STATE_UNCHECKED_IN)
+                    performToWorkPage();
+                else if (STATE == STATE_UNCHECKED_IN)
+                    switchMine();
+            } else if (SETTINGWINDOW.equals(className) && STATE != STATE_UNCHECKED_IN) {
+                inputClick(SETTING_SIGN_OUT_ID);
+            } else if (ALERT_DIALOG_WINDOW.equals(className)) {
+                List<AccessibilityNodeInfo> mAccessibilityNodeInfos = new ArrayList<>();
             /*模糊匹配,因为文字会改变*/
-            recurseFindByTextToList("请检查网络", this.getRootInActiveWindow(), mAccessibilityNodeInfos);
-            if (mAccessibilityNodeInfos != null && !mAccessibilityNodeInfos.isEmpty())
-                inputClick(SURE_EXCEPTION_ID);
-            List<AccessibilityNodeInfo> mNodeQuit = new ArrayList<>();
-            recurseFindByTextToList("退出", this.getRootInActiveWindow(), mNodeQuit);
-            if (mNodeQuit != null && !mNodeQuit.isEmpty())
-                doQuit();
+                recurseFindByTextToList("请检查网络", this.getRootInActiveWindow(), mAccessibilityNodeInfos);
+                if (!mAccessibilityNodeInfos.isEmpty())
+                    inputClick(SURE_EXCEPTION_ID);
+                List<AccessibilityNodeInfo> mNodeQuit = new ArrayList<>();
+                recurseFindByTextToList("退出", this.getRootInActiveWindow(), mNodeQuit);
+                if (!mNodeQuit.isEmpty())
+                    doQuit();
+            }
+
         }
+    }
+
+    private boolean isCheckInPage() {
+        AccessibilityNodeInfo titleNode = findById("com.alibaba.android.rimet:id/title");
+        if (titleNode != null) {
+            String title = titleNode.getText().toString();
+            if (!TextUtils.isEmpty(title) && (title.contains("草根") || title.contains("考勤打卡"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static final String DD_PROGRESS_DIALOG = "com.alibaba.android.dingtalkbase.widgets.dialog.DDProgressDialog";
     private Handler mHandler = new Handler(Looper.getMainLooper());
+    private int retryCount = 0;
 
     /*处理首页不灵敏回调,默认超过两秒钟，认为是不灵敏回调*/
     private void handleHomeInsensitiveCallback(final long time) {
@@ -342,8 +352,14 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
                     return;
                 // DingDingHelperAccessibilityService.CURRENT_WINDOW.equals(DingDingHelperAccessibilityService.DD_PROGRESS_DIALOG)
                 Log.i("Infoss", "---------------->>  time:" + DingDingHelperAccessibilityService.this.tag_callback_time + "   time:" + time);
-                if (DingDingHelperAccessibilityService.this.tag_callback_time == time || DingDingHelperAccessibilityService.CURRENT_WINDOW.equals(DingDingHelperAccessibilityService.CHECK_IN_PAGER_TAGET))
-                    ShellUtils.execCmd("input swipe 300 800 300 500", true);
+                if (STATE != STATE_CHECKED_IN && DingDingHelperAccessibilityService.CURRENT_WINDOW.equals(DingDingHelperAccessibilityService.CHECK_IN_PAGER_TAGET) && isCheckInPage()) {
+                    Log.i("Infoss", "---------------->>  clickCheckInButtonInPage");
+                    clickCheckInButtonInPage();
+                }
+                if (STATE == STATE_CHECKED_IN) {
+                    Log.i("Infoss", "---------------->>  doQuit");
+                    closeHelperService();
+                }
                 Log.i("Infoss", "---------------->>  switchMine");
             }
         }, 2000);
@@ -352,7 +368,6 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
 
     private void notificationChanged(AccessibilityEvent event) {
         try {
-
             List<CharSequence> mCharSequences = event.getText();
             if (mCharSequences == null || mCharSequences.isEmpty())
                 return;
@@ -376,26 +391,31 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
         }
     }
 
+    private boolean isCheckingPage = false;
+
     private void windowContentChanged() {
 
         switch (CURRENT_WINDOW) {
-
             case HOMEWINDOW:
-                setCurrentPagerId();
-            /*如果当前状态是没有打卡状态*/
+                try {
+                    setCurrentPagerId();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    break;
+                }
+                /*如果当前状态是没有打卡状态*/
                 if (STATE == STATE_UNCHECKED_IN) {
-                /*检查下是否在考勤打卡页面*/
-                    boolean isCheckInPager = isCheckInPager();
-                    if (!isCheckInPager) {
+                    Log.i("Infoss", "当前状态是没有打卡状态");
+                    /*检查下是否在考勤打卡页面*/
+                    if (!isWorkPager()) {
                         Log.i("Infoss", "切换页面");
-                        performWaitCheckIn();
+                        performToWorkPage();
                     } else {
-                /*如果当前页面是公司页面*/
-                        Log.i("Infoss", "当前页面是公司页面");
-                        openCheckInPager();
+                    /*如果当前页面是公司页面*/
+                        Log.i("Infoss", "当前页面是公司页面,尝试打开考勤打卡页面");
+                        postDelayedOpenCheckInPage();
                     }
-                } else if (STATE == STATE_CHECKED_IN) {//如果当前状态为已经打卡了，那么执行退出逻辑
-
+                } else if (STATE == STATE_CHECKED_IN) {
                     Log.i("Infoss", "current:" + CURRENT_PAGER);
                     if (MINE_PAGER.equals(CURRENT_PAGER)) {//如果当前页面已经是切换到我的页面 ， 执行设置点击
                         inputClick(MINE_SETTING_ID);
@@ -403,26 +423,35 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
                     /*切换到我的页面*/
                         switchMine();
                     }
-
                 }
                 break;
             case CHECK_IN_PAGER_TAGET:
-                try {
-                    Log.i("Infoss", "openCheckInDialog:::" + STATE);
-                    if (STATE != STATE_CHECKED_IN) {
-                        openCheckInDialog();
+                Log.i("Infoss", "当前页面是CHECK_IN_PAGER页面");
+                if (STATE != STATE_CHECKED_IN) {
+                    if (!isCheckingPage) {
+                        isCheckingPage = true;
+                        Log.i("Infoss", "延迟执行clickCheckInButtonInPage");
+                        mHandler.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                isCheckingPage = false;
+                                if (!isCheckInPage()) {
+                                    Log.i("Infoss", "当前页面不是CHECK_IN_PAGER页面:backHomePager");
+                                    backHomePager();
+                                } else {
+                                    clickCheckInButtonInPage();
+                                }
+                            }
+                        }, 5000);
                     } else {
-                        finishSignIn();
+                        Log.i("Infoss", "等待执行打卡：");
                     }
-                } catch (Exception e) {
-                    Log.i("Infoss", "异常:" + e.getMessage());
-                    e.printStackTrace();
+                } else {
+                    finishSignIn();
                 }
-
-
                 break;
             case SETTINGWINDOW:
-//                doQuit();
+                doQuit();
                 break;
             case DingDingHelperAccessibilityService.LOGINWINDOW:
                 if (STATE == STATE_UNCHECKED_IN) {
@@ -431,6 +460,20 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
                 break;
 
         }
+    }
+
+    /*切换到我的，执行退出 操作*/
+    private void switchMine() {
+        Log.i("Infoss", "state:" + STATE);
+        if (STATE != STATE_CHECKED_IN)
+            return;
+        AccessibilityNodeInfo mAccessibilityNodeInfo = findById(HOME_MINE_ID);
+        Log.i("Infoss", "mAccessibilityNodeInfo:" + mAccessibilityNodeInfo);
+        if (mAccessibilityNodeInfo == null)
+            return;
+        Log.i("Infoss", "switchMineClick");
+        mAccessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        CURRENT_PAGER = MINE_PAGER;
     }
 
 
@@ -443,7 +486,6 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo mNodeInfos = recurseFindByText("我知道了", mAccessibilityNodeInfo);//找到我知道了，完成打卡， 退出
         if (mNodeInfos == null) {
             backHomePager();
-            handleHomeInsensitiveCallback(tag_callback_time);
             return;
         }
         Log.i("Infoss", "mNodeInfos");
@@ -484,25 +526,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
             if (mAccountEntities == null)
                 return;
             Log.i("Infoss", "data");
-            if (index >= mAccountEntities.size()) {
-                Log.i("Infoss", "已经没有账户了:  " + mAccountEntities.toString() + "  current:" + targetCheckInAcount.toString());
-                String[] hm = DateUtils.getHourAndMin(System.currentTimeMillis()).split(":");
-                if (Integer.parseInt(hm[0]) > TIME_LIMIT) {
-                    index = 0;
-                    targetCheckInAcount = mAccountEntities.get(index++);
-                    Log.i("Infoss", "回到第一个账户:" + targetCheckInAcount.toString() + "    index:" + (index - 1));
-                }
-                closeHelperService();
-                return;
-            }
-            Log.i("Infoss", "doScript");
-
-            doScript();
-
-            if (STATE == STATE_UNCHECKED_IN) {
-                toSignIn();
-            }
-
+            closeHelperService();
         }
     }
 
@@ -510,6 +534,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
     private void setCurrentPagerId() {
 
         AccessibilityNodeInfo mAccessibilityNodeInfo = getRootInActiveWindow();
+        if (mAccessibilityNodeInfo == null) return;
         List<AccessibilityNodeInfo> listMine = mAccessibilityNodeInfo.findAccessibilityNodeInfosByViewId(HEADER_MINE_ID);
         if (listMine != null && !listMine.isEmpty()) {
             CURRENT_PAGER = MINE_PAGER;
@@ -540,21 +565,17 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
 
     }
 
-
-    /*切换到我的，执行退出 操作*/
-    private void switchMine() {
-        Log.i("Infoss", "state:" + STATE);
-        if (STATE != STATE_CHECKED_IN)
-            return;
-        AccessibilityNodeInfo mAccessibilityNodeInfo = findById(HOME_MINE_ID);
-        Log.i("Infoss", "mAccessibilityNodeInfo:" + mAccessibilityNodeInfo);
-        if (mAccessibilityNodeInfo == null)
-            return;
-        Log.i("Infoss", "switchMineClick");
-        mAccessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        CURRENT_PAGER = MINE_PAGER;
+    private void postDelayedOpenCheckInPage() {
+        if (!isTryOpenCheckInPage) {
+            isTryOpenCheckInPage = true;
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    openCheckInPager();
+                }
+            }, 2000);
+        }
     }
-
 
     /**
      * 点击打卡
@@ -563,63 +584,74 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
      * 如果当前时间小于12点， 去寻找上班打卡，如果大于12点， 去寻找
      * 下班打卡。
      */
-    private void openCheckInDialog() {
+    private void clickCheckInButtonInPage() {
+        Log.i("Infoss", "执行打卡 clickCheckInButtonInPage ");
         AccessibilityNodeInfo mAccessibilityNodeInfo = findById(WEBVIEW_PARENT);
         if (mAccessibilityNodeInfo == null)
             return;
-
-
         String date = getHourAndMin(System.currentTimeMillis());
 
         String[] arrayDate = date.split(":");
         int hour = Integer.parseInt(arrayDate[0]);
 
         if (hour > TIME_LIMIT) {
-            Log.i("Infoss", "执行下班打卡  openCheckInDialog");
+            Log.i("Infoss", "执行下班打卡  openCheckInPage");
 
             List<AccessibilityNodeInfo> mNodeInfos = new ArrayList<>();
             recurseFindByTextToList("打卡时间", this.getRootInActiveWindow(), mNodeInfos);
-
             Log.i("Infoss", "recurseFindByTextToList:" + mNodeInfos.size());
             if (mNodeInfos.size() >= 2) {
                 STATE = STATE_CHECKED_IN;
                 mNodeInfos.clear();
-                mNodeInfos = null;
+                Log.i("Infoss", "您已经打卡了");
                 Toast.makeText(App.mContext, "您已经打卡了", Toast.LENGTH_SHORT).show();
                 backHomePager();
                 return;
             }
-
-            AccessibilityNodeInfo mInfoAfter = recurseFindByText(AFTER_WORK, this.getRootInActiveWindow());
+            AccessibilityNodeInfo mInfoAfter = findRecurseByText(1500, AFTER_WORK, this.getRootInActiveWindow());
             if (mInfoAfter == null) {
-                Log.i("Infoss", "mInfoAfter  null");
+                Log.i("Infoss", "尝试下班打卡失败了");
+                retryCount++;
+                handleHomeInsensitiveCallback(tag_callback_time);
                 return;
+//            } else {
+//                Toas、t.makeText(App.mContext, "找到：外勤打卡", Toast.LENGTH_SHORT).show();
             }
-            recycle(mAccessibilityNodeInfo, AFTER_WORK, true);
+            Log.i("Infoss", "执行下班打卡");
+            recycle(mInfoAfter, AFTER_WORK, true);
         } else {
-
             AccessibilityNodeInfo mInfo = recurseFindByText(AFTER_WORK, this.getRootInActiveWindow());
-            Log.i("Infoss", "上班打卡为空   openCheckInDialog");
+            Log.i("Infoss", "上班打卡为空   openCheckInPage");
             if (mInfo != null) {
                 Log.i("Infoss", "mInfo  null");
-//                Toast.makeText(App.mContext, "已经打卡", Toast.LENGTH_SHORT).show();
                 STATE = STATE_CHECKED_IN;
                 backHomePager();
                 return;
             }
-            AccessibilityNodeInfo mInfoGo = recurseFindByText(GO_TO_WORK, this.getRootInActiveWindow());
+            AccessibilityNodeInfo mInfoGo = findRecurseByText(1500, GO_TO_WORK, this.getRootInActiveWindow());
             if (mInfoGo == null) {
-                Log.i("Infoss", "mInfo  上班打卡为空   null");
+                Log.i("Infoss", "尝试上班打卡失败了");
+                retryCount++;
+                handleHomeInsensitiveCallback(tag_callback_time);
                 return;
             }
-            Log.i("Infoss", "shangban打卡  openCheckInDialog  iscut:" + isGo);
-            recycle(mAccessibilityNodeInfo, GO_TO_WORK, true);
+            Log.i("Infoss", "执行上班打卡  null");
+            recycle(mInfoGo, GO_TO_WORK, true);
         }
 
     }
 
     private void backHomePager() {
-        inputClick(CHECK_IN_PAGER_BACK);
+        if (!inputClick(CHECK_IN_PAGER_BACK) &&
+                !inputClick(CHECK_PAGE_BACK) &&
+                !inputClick("android:id/home") &&
+                !inputClick("android:id/up") &&
+                !inputClick("com.alibaba.android.rimet:id/menu_back")) {
+            AccessibilityNodeInfo mAccessibilityNodeInfo = this.getRootInActiveWindow();
+            if (mAccessibilityNodeInfo != null) {
+                mAccessibilityNodeInfo.performAction(AccessibilityService.GLOBAL_ACTION_BACK);
+            }
+        }
         handleHomeInsensitiveCallback(tag_callback_time);
     }
 
@@ -640,16 +672,56 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
         return list.get(0);
     }
 
+    private List<AccessibilityNodeInfo> findListByText(String text) {
+        AccessibilityNodeInfo mAccessibilityNodeInfo = this.getRootInActiveWindow();
+        if (mAccessibilityNodeInfo == null)
+            return null;
+        List<AccessibilityNodeInfo> list = mAccessibilityNodeInfo.findAccessibilityNodeInfosByText(text);
+        if (list == null || list.isEmpty())
+            return null;
+        return list;
+    }
+
     /*打开签到页面---考勤*/
     private void openCheckInPager() {
-        AccessibilityNodeInfo mAccessibilityNodeInfo = findById(RECYCLERVIEW_WORK_ID);
-        if (mAccessibilityNodeInfo == null)
-            return;
-        recycle(mAccessibilityNodeInfo, "考勤打卡", false);
+        List<AccessibilityNodeInfo> mAccessibilityNodeInfo = findListByText("考勤打卡");
+        if (mAccessibilityNodeInfo == null || mAccessibilityNodeInfo.size() == 0) {
+            Log.i("Infoss", "没找到考勤打卡");
+            tryMoveUpLater();
+        } else {
+            Log.i("Infoss", "找到含考勤打卡,尝试打开页面：size=" + mAccessibilityNodeInfo.size());
+            boolean hasFindCheckBtn = false;
+            for (int i = 0; i < mAccessibilityNodeInfo.size(); i++) {
+                AccessibilityNodeInfo info = mAccessibilityNodeInfo.get(i);
+                if (checkNodeInfo(info, "考勤打卡")) {
+                    Log.i("Infoss", "打开考勤打卡页:" + i + "---" + info.toString());
+                    recycle(info, "考勤打卡", false);
+                    hasFindCheckBtn = true;
+                }
+            }
+            if (!hasFindCheckBtn) {
+                new OrderThread("input swipe 200 800 200 100").start();
+            }
+        }
+        isTryOpenCheckInPage = false;
+    }
+
+    private void tryMoveUpLater() {
+        if (!hasMoveUp) {
+            hasMoveUp = true;
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    Log.i("Infoss", "向上滑一下");
+                    new OrderThread("input swipe 200 800 200 100").start();
+                    hasMoveUp = false;
+                }
+            }, 1500);
+        }
     }
 
     /*判断一下是不是签到考勤页面*/
-    private boolean isCheckInPager() {
+    private boolean isWorkPager() {
 
         return findById(TAB_COMPANY_INDEX_ID) != null;
     }
@@ -666,9 +738,9 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
 
 
     /*切换到准备打卡窗口*/
-    private void performWaitCheckIn() {
+    private void performToWorkPage() {
 
-        Log.i("Infoss", "performWaitCheckIn  .. ");
+        Log.i("Infoss", "performToWorkPage  .. ");
         AccessibilityNodeInfo mAccessibilityNodeInfo = this.getRootInActiveWindow();
         if (mAccessibilityNodeInfo == null)
             return;
@@ -731,7 +803,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
         }
 
         List<AccessibilityNodeInfo> mEdPasswordNodes = mAccessibilityNodeInfo.findAccessibilityNodeInfosByViewId(PASSWORD_ID);
-        if (mEdPasswordNodes == null)
+        if (mEdPasswordNodes == null || mEdPasswordNodes.size() == 0)
             return;
         AccessibilityNodeInfo mEdPasswordNode = mEdPasswordNodes.get(0);
         CharSequence mCharSequencePassword = mEdPasswordNode.getText();
@@ -776,14 +848,17 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
      * @param clickId
      */
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
-    private void inputClick(String clickId) {
+    private boolean inputClick(String clickId) {
         AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
+        boolean result = false;
         if (nodeInfo != null) {
             List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId(clickId);
             for (AccessibilityNodeInfo item : list) {
-                item.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                result = item.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                if (result) break;
             }
         }
+        return result;
     }
 
     /*表示是否已经中断*/
@@ -802,7 +877,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
 
         if (!isCut) {
             isCut = true;
-//            Toast.makeText(App.mContext, "你已经打卡", Toast.LENGTH_SHORT).show();
+            Toast.makeText(App.mContext, "你已经打卡", Toast.LENGTH_SHORT).show();
         }
         Log.i("Infoss", "执行完成 adb");
         Rect mRect = new Rect();
@@ -820,7 +895,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
     private void handleGoToWork(AccessibilityNodeInfo info) {
         if (isGo) {
             isGo = false;
-//            Toast.makeText(App.mContext, "打卡失败，被拦截，进入高级权限打卡 ... ", Toast.LENGTH_SHORT).show();
+            Toast.makeText(App.mContext, "打卡失败，被拦截，进入高级权限打卡 ... ", Toast.LENGTH_SHORT).show();
             Rect mRect = new Rect();
             info.getBoundsInScreen(mRect);
             Log.i("Infoss", "rect:" + mRect + "   " + mRect.centerX() + "   " + mRect.centerY());
@@ -847,9 +922,7 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
 
             if (((accessibilityNodeInfo.getText() != null && accessibilityNodeInfo.getText().toString().contains(target)) || (accessibilityNodeInfo.getContentDescription() != null && accessibilityNodeInfo.getContentDescription().toString().contains(target)))) {
                 mInfos.add(accessibilityNodeInfo);
-                return;
-            } else
-                return;
+            }
         } else {
             if (accessibilityNodeInfo == null)
                 return;
@@ -858,8 +931,20 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
                 AccessibilityNodeInfo child = accessibilityNodeInfo.getChild(i);
                 recurseFindByTextToList(target, child, mInfos);
             }
-            return;
         }
+    }
+
+
+    private AccessibilityNodeInfo findRecurseByText(int i, final String target, final AccessibilityNodeInfo accessibilityNodeInfo) {
+        final int retryCount = i - 1;
+        AccessibilityNodeInfo result = null;
+        if (retryCount > 0) {
+            result = recurseFindByText(target, accessibilityNodeInfo);
+            if (result == null) {
+                result = findRecurseByText(retryCount, target, accessibilityNodeInfo);
+            }
+        }
+        return result;
     }
 
     /**
@@ -893,6 +978,16 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
         }
     }
 
+    public boolean checkNodeInfo(AccessibilityNodeInfo info, String target) {
+        boolean result = false;
+        if (info != null && info.getChildCount() == 0) {
+            if (info.getText() != null && target.equals(info.getText().toString())) {
+                result = true;
+            }
+        }
+        return result;
+    }
+
     /**
      *
      */
@@ -901,7 +996,9 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
         if (info != null && info.getChildCount() == 0) {
             if (info.getContentDescription() != null && info.getContentDescription().toString().equals(target) && isClickSelft) {
 
+                Log.i("Infoss", "----->" + info.toString());
                 String content = info.getContentDescription().toString();
+
                 info.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                 if (content.equals(AFTER_WORK))
                     handleIt(info);
@@ -923,9 +1020,9 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
                         }
                         parent = parent.getParent();
                     }
+                } else {
+                    Log.i("Infoss", "文案(" + info.getText().toString() + ")与目标（" + target + "）不符 ");
                 }
-
-
             }
         } else {
 
@@ -982,28 +1079,29 @@ public class DingDingHelperAccessibilityService extends AccessibilityService {
             return;
         }
         if (mAccountEntities == null || mAccountEntities.isEmpty() || targetCheckInAcount == null) {
-            Toast.makeText(App.mContext, "账户为空", Toast.LENGTH_SHORT).show();
-            return;
-        }
+            Toast.makeText(App.mContext, "账户为空,请清空账号后重试。", Toast.LENGTH_SHORT).show();
+        } else {
         /*标示上已经正在打卡*/
-        isChecking = true;
-        STATE = STATE_UNCHECKED_IN;
+            isChecking = true;
+            retryCount = 0;
+            STATE = STATE_UNCHECKED_IN;
 //        runing_monitor = false;
-//        launchApp(this, DING_DING_PAGKET_NAME);
+            launchApp(this, DING_DING_PAGKET_NAME);
 
-        List<String> mStringList = new ArrayList<>();
+            List<String> mStringList = new ArrayList<>();
         /*唤醒屏幕*/
-        if (!DingHelperUtils.isScreenLight(App.mContext)) {
-            mStringList.add("input keyevent 26");
+            if (!DingHelperUtils.isScreenLight(App.mContext)) {
+                mStringList.add("input keyevent 26");
 //            wakeAndUnlock();
-        }
-        if (DingHelperUtils.isScreenLocked(App.mContext)) {
+            }
+            if (DingHelperUtils.isScreenLocked(App.mContext)) {
                  /*从下往上滑动解锁*/
-            mStringList.add("input swipe 200 800 200 100");
-        }
+                mStringList.add("input swipe 200 800 200 100");
+            }
         /*启动钉钉*/
-        mStringList.add("am start -n " + DING_DING_PAGKET_NAME + "/" + LOGINWINDOW);
-        new OrderThread(mStringList).start();
+            mStringList.add("am start -n " + DING_DING_PAGKET_NAME + "/" + HOMEWINDOW);
+            new OrderThread(mStringList).start();
+        }
     }
 
     @Override

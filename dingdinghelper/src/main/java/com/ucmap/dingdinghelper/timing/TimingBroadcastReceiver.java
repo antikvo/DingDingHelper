@@ -34,7 +34,6 @@ public class TimingBroadcastReceiver extends BroadcastReceiver {
             return;
         }
         lastTime = tmp;
-        // TODO Auto-generated method stub
         long intervalMillis = intent.getLongExtra("intervalMillis", 0);
         if (intervalMillis != 0 && !Constants.IS_NOTITY_TYPE_CHECK_IN_TAG) {
             TimingManagerUtil.resetTiming(context, System.currentTimeMillis() + intervalMillis,

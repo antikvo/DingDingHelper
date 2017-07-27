@@ -53,7 +53,7 @@ public class TimingService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.i("Infoss", "TimingService  oncreate");
+        Log.i("DingDingHelper", "TimingService  oncreate");
         init();
         increasePriority();
     }
@@ -77,12 +77,12 @@ public class TimingService extends Service {
         }
         this.mAccountEntity = mAccountEntities.get(0);
 
-        /*try {
-            *//* 启动守护进程，一分钟监测一次， 如果进程被kill 会重新拉起 *//*
-            Daemon.run(this, TimingService.class, Daemon.INTERVAL_ONE_MINUTE);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }*/
+//        try {
+////             启动守护进程，一分钟监测一次， 如果进程被kill 会重新拉起
+//            Daemon.run(this, TimingService.class, Daemon.INTERVAL_ONE_MINUTE);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
 
         initCheckInTime(null);
         if (mNotifyThread == null || !mNotifyThread.isAlive()) {
@@ -105,7 +105,7 @@ public class TimingService extends Service {
                 time = (String) SPUtils.getString(Constants.MORNING_CHECK_IN_TIME, "8:45");
             } else {
                 STATE = 1;
-                time = (String) SPUtils.getString(Constants.AFTERNOON_CHECK_IN_TIME, "20:45");
+                time = (String) SPUtils.getString(Constants.AFTERNOON_CHECK_IN_TIME, "18:05");
             }
 
 
@@ -113,7 +113,7 @@ public class TimingService extends Service {
                 String[] hourAndMin = time.split(":");
                 this.hour = Integer.parseInt(hourAndMin[0]);
                 this.min = Integer.parseInt(hourAndMin[1]);
-                Log.i("Infoss", "time:" + this.hour + ":" + this.min);
+                Log.i("DingDingHelper", "time:" + this.hour + ":" + this.min);
             }
         } else {
 
@@ -134,16 +134,16 @@ public class TimingService extends Service {
                 this.hour = tempH;
                 this.min = tempM;
             } else {
-                Log.i("Infoss", "  执行 为空");
+                Log.i("DingDingHelper", "  执行 为空");
                 initCheckInTime(null);
             }
             String t = (String) SPUtils.getString(Constants.AFTERNOON_CHECK_IN_TIME, "8:45");
 
-            Log.i("Infoss", "t:" + t);
+            Log.i("DingDingHelper", "t:" + t);
 
         }
 
-        Log.i("Infoss", "target Time:" + this.hour + ":" + this.min);
+        Log.i("DingDingHelper", "target Time:" + this.hour + ":" + this.min);
     }
 
 
@@ -173,7 +173,7 @@ public class TimingService extends Service {
 
     /*提升service 的优先级*/
     private void increasePriority() {
-        Log.i("Infoss", "increasePriority:" + Build.VERSION.SDK_INT);
+        Log.i("DingDingHelper", "increasePriority:" + Build.VERSION.SDK_INT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
             Notification.Builder mBuilder = new Notification.Builder(this);
             mBuilder.setSmallIcon(R.mipmap.app_logo);
@@ -187,11 +187,11 @@ public class TimingService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Log.i("Infoss", "TimingService  onDestroy");
+        Log.i("DingDingHelper", "TimingService  onDestroy");
         runing_monitor = false;
         if (mNotifyThread != null && mNotifyThread.isAlive()) {
 
-            Log.i("Infoss", " 杀死线程");
+            Log.i("DingDingHelper", " 杀死线程");
             /*如果Thread 正在休眠需要中断休眠 避免泄漏*/
             if (!mNotifyThread.isInterrupted()) {
                 mNotifyThread.interrupt();
@@ -207,7 +207,7 @@ public class TimingService extends Service {
         @Override
         public void onCreate() {
             super.onCreate();
-            Log.i("Infoss", "a service oncreate");
+            Log.i("DingDingHelper", "a service oncreate");
             Notification.Builder mBuilder = new Notification.Builder(this);
             mBuilder.setSmallIcon(R.mipmap.app_logo);
             startForeground(NOTIFICATION_ID, mBuilder.build());
@@ -252,7 +252,7 @@ public class TimingService extends Service {
 
     private void setTargetTimeForLockIn() {
         String time = "";
-        time = (String) SPUtils.getString(Constants.MORNING_CHECK_IN_TIME, "6:45");
+        time = (String) SPUtils.getString(Constants.MORNING_CHECK_IN_TIME, "8:45");
         int[] hm = parseTime(time);
         this.hour = hm[0];
         this.min = hm[1];
@@ -261,22 +261,22 @@ public class TimingService extends Service {
     private void toCheckIn() {
         if (Constants.IS_NOTITY_TYPE_CHECK_IN_TAG) {
             ShellUtils.execCmd("am broadcast -a com.ucmap.dingdinghelper.clock", true);
-            Log.i("Infoss", "执行 命令打卡:am broadcast -a com.ucmap.dingdinghelper.clock ");
+            Log.i("DingDingHelper", "执行 命令打卡:am broadcast -a com.ucmap.dingdinghelper.clock ");
         } else {
-            Log.i("Infoss", "打卡失败  等待 AlarmManager 唤醒");
+            Log.i("DingDingHelper", "打卡失败  等待 AlarmManager 唤醒");
         }
     }
 
     private void sendNotification(int hour, int min) {
 
 
-        Log.i("Infoss", "当前状态:" + STATE + "  hour:" + hour + "  min:" + min);
+        Log.i("DingDingHelper", "当前状态:" + STATE + "  hour:" + hour + "  min:" + min);
         if ((STATE == 0) && (this.hour < hour || (this.hour == hour && this.min <= min))) {
-            Log.i("Infoss", "时间:" + this.hour + "  :  " + this.min);
+            Log.i("DingDingHelper", "时间:" + this.hour + "  :  " + this.min);
             if ((this.hour == hour && this.min <= min))
                 toCheckIn();
             String time = "";
-            time = (String) SPUtils.getString(Constants.AFTERNOON_CHECK_IN_TIME, "20:45");
+            time = (String) SPUtils.getString(Constants.AFTERNOON_CHECK_IN_TIME, "18:45");
             STATE = 1;
 
             String[] hm = time.split(":");
@@ -289,7 +289,7 @@ public class TimingService extends Service {
             sendNotification(hour, min);
             return;
         } else if (STATE == 1 && (this.hour < hour || (this.hour == hour && this.min <= min))) {
-            Log.i("Infoss", "else if 时间:" + this.hour + "  :  " + this.min);
+            Log.i("DingDingHelper", "else if 时间:" + this.hour + "  :  " + this.min);
             if ((this.hour == hour && this.min <= min))
                 toCheckIn();
             setTargetTimeForLockIn();
@@ -300,7 +300,7 @@ public class TimingService extends Service {
         } else if (STATE == 2) {
             if (hour < 23 && hour >= 12) {
                 setTargetTimeForLockIn();
-                Log.i("Infoss", "设置时间为:" + this.hour + "  min:" + this.min);
+                Log.i("DingDingHelper", "设置时间为:" + this.hour + "  min:" + this.min);
             } else
                 STATE = 0;
         }
@@ -327,7 +327,7 @@ public class TimingService extends Service {
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this);
         mBuilder.setSmallIcon(R.mipmap.app_logo);
         notifyUpdateUi("打卡:" + this.hour + ":" + this.min + ", 剩余" + lHour + "小时 " + lMin + " 分钟");
-        Log.i("Infoss", "sendNotification 打卡时间是:" + this.hour + ":" + this.min + " 当前时间为: " + hour + ":" + min + "   " + "距离打卡时间还有: " + lHour + " 个小时" + lMin + " 分");
+        Log.i("DingDingHelper", "sendNotification 打卡时间是:" + this.hour + ":" + this.min + " 当前时间为: " + hour + ":" + min + "   " + "距离打卡时间还有: " + lHour + " 个小时" + lMin + " 分");
         mBuilder.setContentText("距离打卡时间还有: " + lHour + " 个小时" + lMin + " 分").setContentTitle("钉钉自动打卡");
         PendingIntent mPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT);
         mBuilder.setContentIntent(mPendingIntent);
@@ -364,12 +364,12 @@ public class TimingService extends Service {
 
             /*把优先级级别提到最高,保证通知线程最优先运行*/
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
-            Log.i("Infoss", "start NotifyThread:" + runing_monitor);
+            Log.i("DingDingHelper", "start NotifyThread:" + runing_monitor);
             while (runing_monitor) {
 
 
                 String time = getHourAndMin(System.currentTimeMillis());
-                Log.i("Infoss", "time:" + time + "       currentThreadTimeMillis:" + SystemClock.currentThreadTimeMillis() + "   currentTimeMillis:" + System.currentTimeMillis() + "  elapsedRealtime:" + SystemClock.elapsedRealtime() + "  uptimeMillis :" + SystemClock.uptimeMillis());
+                Log.i("DingDingHelper", "time:" + time + "       currentThreadTimeMillis:" + SystemClock.currentThreadTimeMillis() + "   currentTimeMillis:" + System.currentTimeMillis() + "  elapsedRealtime:" + SystemClock.elapsedRealtime() + "  uptimeMillis :" + SystemClock.uptimeMillis());
                 if (TextUtils.isEmpty(time))
                     continue;
                 String[] hourAndMin = time.split(":");
@@ -384,7 +384,7 @@ public class TimingService extends Service {
                     sleep(1000 * 10);
                 } catch (InterruptedException e) {
 //                    e.printStackTrace();
-                    Log.i("Infoss", "已经被中断:" + e.getLocalizedMessage());
+                    Log.i("DingDingHelper", "已经被中断:" + e.getLocalizedMessage());
                     return;
                 }
 

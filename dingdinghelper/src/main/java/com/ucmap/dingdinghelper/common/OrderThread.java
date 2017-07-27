@@ -1,5 +1,6 @@
 package com.ucmap.dingdinghelper.common;
 
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.ucmap.dingdinghelper.utils.ShellUtils;
@@ -20,15 +21,23 @@ public class OrderThread extends Thread {
 
 
     private List<String> mList = null;
+    private String order = null;
 
     public OrderThread(List<String> o) {
         this.mList = o;
+    }
+    public OrderThread(String o){
+        this.order = o;
     }
 
     @Override
     public void run() {
         if (mList != null && !mList.isEmpty()) {
             ShellUtils.CommandResult mCommandResult = ShellUtils.execCmd(mList, true);
+            Log.i("Infoss", "cmd:" + mCommandResult.toString());
+        }
+        if (!TextUtils.isEmpty(order)){
+            ShellUtils.CommandResult mCommandResult = ShellUtils.execCmd(order, true);
             Log.i("Infoss", "cmd:" + mCommandResult.toString());
         }
     }

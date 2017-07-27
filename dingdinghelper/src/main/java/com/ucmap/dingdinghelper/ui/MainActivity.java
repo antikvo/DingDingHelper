@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
@@ -39,6 +40,7 @@ import com.ucmap.dingdinghelper.pixelsdk.PixelActivityUnion;
 import com.ucmap.dingdinghelper.pixelsdk.PointActivity;
 import com.ucmap.dingdinghelper.services.TimingService;
 import com.ucmap.dingdinghelper.sphelper.SPUtils;
+import com.ucmap.dingdinghelper.timing.TimingBroadcastReceiver;
 import com.ucmap.dingdinghelper.utils.Constants;
 import com.ucmap.dingdinghelper.utils.DingHelperUtils;
 import com.ucmap.dingdinghelper.utils.JsonUtils;
@@ -46,6 +48,7 @@ import com.ucmap.dingdinghelper.utils.ShellUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -54,6 +57,7 @@ import static com.ucmap.dingdinghelper.utils.Constants.MORNING_CHECK_IN_TIME;
 
 public class MainActivity extends AppCompatActivity {
 
+    private TimingBroadcastReceiver timingBroadcastReceiver;
     private Handler mHandler = new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
@@ -126,12 +130,13 @@ public class MainActivity extends AppCompatActivity {
 
     private TimePickerDialog mTimePickerDialog;
     private TextView mTimeTextView;
+    private Random r = new Random();
 
 
     private TextView mNTimeTextView;
 
     private void showPickerMorning() {
-
+        int minTime = 45 + r.nextInt(10);
         if (mTimePickerDialog == null) {
             mTimePickerDialog = new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
                 @Override
@@ -148,7 +153,7 @@ public class MainActivity extends AppCompatActivity {
                         mTimeTextView.setText(hourOfDay + ":" + minute);
                     toModifyNotifyTime(hourOfDay + ":" + minute);
                 }
-            }, 8, 45, true);
+            }, 8, minTime, true);
         }
         mTimePickerDialog.show();
     }
@@ -177,6 +182,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showPickerAfterNoon() {
+
         if (mNoonTimePickerDialog == null) {
             mNoonTimePickerDialog = new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
 
@@ -313,6 +319,8 @@ public class MainActivity extends AppCompatActivity {
                 .start();
         mToolbar = (Toolbar) this.findViewById(R.id.toolbar);
         mToolbar.setTitleTextColor(Color.WHITE);
+        timingBroadcastReceiver = new TimingBroadcastReceiver();
+        registerReceiver(timingBroadcastReceiver, new IntentFilter("com.ucmap.dingdinghelper.clock"));
         this.setSupportActionBar(mToolbar);
         this.mFrameLayout = (FrameLayout) this.findViewById(R.id.parentGroup_frameLayout);
         mPTimeTextView = (TextView) this.findViewById(R.id.p_time_textView_);
@@ -373,7 +381,7 @@ public class MainActivity extends AppCompatActivity {
                     startActivityForResult(mIntent, 0x88);
                     break;
                 case R.id.open_service:
-                    List<String> orders = new ArrayList<String>();
+                    List<String> orders = new ArrayList<>();
                     orders.add("am broadcast -a com.ucmap.dingdinghelper.clock");
                     new OrderThread(orders).start();
                     break;
@@ -490,6 +498,7 @@ public class MainActivity extends AppCompatActivity {
             isBindServices = false;
         }
         mHandler.removeCallbacksAndMessages(null);
+        unregisterReceiver(timingBroadcastReceiver);
         try {
             if (mITimingAidlInterface != null)
                 mITimingAidlInterface.unRegisterTimerListener(mITimerListener);
